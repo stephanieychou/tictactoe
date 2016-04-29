@@ -8,18 +8,18 @@ class Channel(models.Model):
 class Board(models.Model):
 	# Config is the base 10 equivalent of the board represented as a base 3 number.
 	# Where empty spaces are 0, X is 1 and O is 2.
-	# For example: X | O | X 	 1 | 2 | 1
-	#			   ---------	 ---------
+	# For example: X | O | X     1 | 2 | 1
+	#  	       ---------     ---------
 	#              O | X | O  => 2 | 1 | 2 => 121212120 in base 3 => 12300 in base 10 = config
-	#			   ---------	 ---------
-	# 			   X | O |  	 1 | 2 | 0
+	#              ---------     ---------
+	# 	       X | O |       1 | 2 | 0
 	config = models.IntegerField(default=0) 
 	game_over = models.BooleanField(default=False)
 	active = models.BooleanField(default=False)
 	channel = models.ForeignKey(Channel, default=None, null=True)
 	
 	def __str__(self):
-		return "\n{0} | {1} | {2}\n----------\n{3} | {4} | {5}\n----------\n{6} | {7} | {8}".format(*self.convertBoardToListOfPlayers()).replace("0", "   ").replace("1", "X").replace("2", "O")
+		return "\n {0} | {1} | {2}\n----------\n {3} | {4} | {5}\n----------\n {6} | {7} | {8}".format(*self.convertBoardToListOfPlayers()).replace("0", "   ").replace("1", "X").replace("2", "O")
 
 	def getLetterAtPosition(self, position):
 		if (position < 0 or position > 8):
