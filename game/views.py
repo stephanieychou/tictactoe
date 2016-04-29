@@ -11,11 +11,10 @@ def startGame(request):
 	try:
 		playerX = Player.objects.get(username=request.GET['usernameX'])
 		playerX.letter = 1
-		playerX.has_next_turn = True
 		playerX.save()
 	except Player.DoesNotExist:
 		# Player does not exist yet. Create new player with username.
-		playerX = Player(username=request.GET['usernameX'], letter=1, has_next_turn = True)
+		playerX = Player(username=request.GET['usernameX'], letter=1)
 		playerX.save()
 	
 	# Try to find existing player by username and set position to 2 (O).	
