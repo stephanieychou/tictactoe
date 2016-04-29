@@ -1,20 +1,23 @@
-from django.shortcuts import render
 from models import Player, Board, Channel
 from django.http import JsonResponse
-import logging
 
 def index(request):
+	# Validate token from Slack.
 	token = request.GET['token']
 	if (token != 'RNmcnBKCdOZBfs3S7habfT85'):
 		return JsonResponse({'text': 'ERROR: Invalid token %s' % token})
+	
+	# Fetch channel if it exists, else create a new Channel object.
 	channel_id = request.GET['channel_id']
 	try:
 		channel = Channel.objects.get(channel_id=channel_id)
 	except Channel.DoesNotExist:
 		channel = Channel(channel_id=channel_id)
 		channel.save() 
-	text = request.GET['text']	
-	args = text.split(' ')
+
+	# Parse command from user.
+	command = request.GET['text']	
+	args = command.split(' ')
 	if (len(args) < 1 or args[0] == 'help'):
 		return showHelp()
 	elif (args[0] == 'startGame'):
@@ -37,33 +40,14 @@ def startGame(args, username, channel):
 
 	usernameO = args[1] # O is the user that usernameX chose to play with
 
-	# Try to find existing player by username and set position to 1 (X).
-	playersWithUsernameX = Player.objects.filter(username=usernameX, channel=None)
-	if (len(playersWithUsernameX) > 1):
-		playerX = playersWithUsernameX[0]
-		playerX.channel = channel
-		playerX.save()
-	else:
-		# Player does not exist yet. Create new player with username.
-		playerX = Player(username=usernameX, channel=channel)
-		playerX.save()
-	
-	# Try to find existing player by username and set position to 2 (O).	
-	playersWithUsernameO = Player.objects.filter(username=usernameO, channel=None)
-	if (len(playersWithUsernameO) > 1):
-		playerO = playersWithUsernameO[0]
-		playerO.channel = channel
-		playerO.save()
-	else:
-		# Player does not exist yet. Create new player with username.
-		playerO = Player(username=usernameO, channel=channel)
-		playerO.save()
-	
+	playerX = findPlayer(usernameX, channel)
+	playerO = findPlayer(usernameO, channel)
+
 	# Create new board for new game.
         board = Board(active=True, channel=channel, playerX=playerX, playerO=playerO)
         board.save()
 	
-	return generateJsonResponse('New Tic Tac Toe game between %s and %s!' % (usernameX, usernameO), '%s has next move.%s' % (playerX.username, str(board)))
+	return generateJsonResponse('New Tic Tac Toe game between %s and %s!' % (usernameX, usernameO), generateBoardWithNextPlayerString(board))
 	
 def makeMove(args, username, channel):
 	# Fetch board or throw error if does not exist.
@@ -74,6 +58,7 @@ def makeMove(args, username, channel):
 		
 	if board.game_over:
 		return generateJsonResponse('Game is over. Please start a new game.')
+
 	# Fetch player or throw error if does not exist.
 	try:
 		player = Player.objects.get(username=username, channel=channel)
@@ -136,7 +121,7 @@ def showBoard(channel):
                 return generateJsonResponse('No active games at the moment.')
 
 	player = board.playerO if board.determineWhichPlayerHasNextMove() == 2 else board.playerX
-	return generateJsonResponse('Active game between %s and %s.' % (board.playerX.username, board.playerO.username), '%s has the next move. %s' % (player.username, str(board)))
+	return generateJsonResponse('Active game between %s and %s.' % (board.playerX.username, board.playerO.username), generateBoardWithNextPlayerString(board))
 
 def showHelp():
 	startGameCommandHelp = '/tictactoe startGame <username> = To start a new game, please specify the username of another user in the channel.'
@@ -145,6 +130,20 @@ def showHelp():
 	helpCommandHelp = '/tictactoe help = To show this menu of commands.'
 	commands = [startGameCommandHelp, makeMoveCommandHelp, showBoardCommandHelp, helpCommandHelp]
 	return generateJsonResponse('Tic Tac Toe Commands List', '\n'.join(commands))
+
+def findPlayer(username, channel):
+	try:         
+		# Try to find existing player by username in this channel.
+		player = Player.objects.get(username=username, channel=channel)
+        except Player.DoesNotExist:
+                # Player does not exist yet. Create new player with username and channel.
+                player = Player(username=username, channel=channel)
+       		player.save()
+	return player
+
+def generateBoardWithNextPlayerString(board):
+	nextPlayer = board.playerO if board.determineWhichPlayerHasNextMove() == 2 else board.playerX
+        return '%s has the next move. %s' % (nextPlayer.username, str(board))
 
 def generateJsonResponse(text, attachmentText='', error=False):
 	if error:
