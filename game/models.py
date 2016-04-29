@@ -5,6 +5,10 @@ from django.db import models
 class Channel(models.Model):
 	channel_id = models.CharField(max_length=32)
 
+class Player(models.Model):
+        username = models.CharField(max_length=32)
+        channel = models.ForeignKey(Channel, default=None, null=True)
+
 class Board(models.Model):
 	# Config is the base 10 equivalent of the board represented as a base 3 number.
 	# Where empty spaces are 0, X is 1 and O is 2.
@@ -17,9 +21,11 @@ class Board(models.Model):
 	game_over = models.BooleanField(default=False)
 	active = models.BooleanField(default=False)
 	channel = models.ForeignKey(Channel, default=None, null=True)
+	playerX = models.ForeignKey(Player, default=None, related_name='playerX')
+	playerO = models.ForeignKey(Player, default=None, related_name='playerO')
 	
 	def __str__(self):
-		return "\n {0} | {1} | {2}\n----------\n {3} | {4} | {5}\n----------\n {6} | {7} | {8}".format(*self.convertBoardToListOfPlayers()).replace("0", "   ").replace("1", "X").replace("2", "O")
+		return '\n\n {0} | {1} | {2}\n----------\n {3} | {4} | {5}\n----------\n {6} | {7} | {8}'.format(*self.convertBoardToListOfPlayers()).replace('0', '  ').replace('1', 'X').replace('2', 'O')
 
 	def getLetterAtPosition(self, position):
 		if (position < 0 or position > 8):
@@ -68,14 +74,4 @@ class Board(models.Model):
 			return 1 # Player X goes first and when there are equal number of Xs and Os on the board.
 		else:
 			return 2
-		
 
-LETTER_OPTIONS = ((1, 'X'), (2, 'O'))
-
-class Player(models.Model):
-	username = models.CharField(max_length=32)
-	letter = models.IntegerField(choices=LETTER_OPTIONS)
-	channel = models.ForeignKey(Channel, default=None, null=True)
-	
-	def __str__(self):
-		return "Player username=%s letter=%s" % (self.username, self.letter)

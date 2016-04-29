@@ -28,44 +28,42 @@ def index(request):
 
 def startGame(args, username, channel):
 	usernameX = username # X is the user that ran startGame command
+
+        if (Board.objects.filter(active=True, channel=channel)):
+                return generateJsonResponse('There is already an active game in this channel. Please wait til the current game is finished to start a new game. To view current game, use /tictactoe showBoard.', error=True)
 	
 	if (len(args) < 2):
 		return generateJsonResponse('Please specify username of player you would like to play with.', error=True)
 
 	usernameO = args[1] # O is the user that usernameX chose to play with
 
-	if (Board.objects.filter(active=True, channel = channel)):
-		return generateJsonResponse('There is already an active game in this channel. Please wait til the current game is finished to start a new game. To view current game, use /tictactoe showBoard.', error=True)
-
-	# Create new board for new game.
-	board = Board(active=True, channel=channel)
-	board.save()
-	
 	# Try to find existing player by username and set position to 1 (X).
 	playersWithUsernameX = Player.objects.filter(username=usernameX, channel=None)
 	if (len(playersWithUsernameX) > 1):
 		playerX = playersWithUsernameX[0]
-		playerX.letter = 1
 		playerX.channel = channel
 		playerX.save()
 	else:
 		# Player does not exist yet. Create new player with username.
-		playerX = Player(username=usernameX, letter=1, channel=channel)
+		playerX = Player(username=usernameX, channel=channel)
 		playerX.save()
 	
 	# Try to find existing player by username and set position to 2 (O).	
 	playersWithUsernameO = Player.objects.filter(username=usernameO, channel=None)
 	if (len(playersWithUsernameO) > 1):
 		playerO = playersWithUsernameO[0]
-		playerO.letter = 2
 		playerO.channel = channel
 		playerO.save()
 	else:
 		# Player does not exist yet. Create new player with username.
-		playerO = Player(username=usernameO, letter=2, channel=channel)
+		playerO = Player(username=usernameO, channel=channel)
 		playerO.save()
-		
-	return generateJsonResponse('New Tic Tac Toe game between %s and %s' % (usernameX, usernameO), '%s has next move.\n%s' % (playerX.username, str(board)))
+	
+	# Create new board for new game.
+        board = Board(active=True, channel=channel, playerX=playerX, playerO=playerO)
+        board.save()
+	
+	return generateJsonResponse('New Tic Tac Toe game between %s and %s!' % (usernameX, usernameO), '%s has next move.%s' % (playerX.username, str(board)))
 	
 def makeMove(args, username, channel):
 	# Fetch board or throw error if does not exist.
@@ -84,7 +82,9 @@ def makeMove(args, username, channel):
 		return generateJsonResponse('Player %s does not exist.' % username, error=True)
 		
 	# Determine if player has next turn.
-	if player.letter != board.determineWhichPlayerHasNextMove():
+	playerLetter = 1 if player == board.playerX else 2
+	nextMove = board.determineWhichPlayerHasNextMove()
+	if (playerLetter != nextMove):
 		return generateJsonResponse('Player %s is going out of turn.' % username, error=True)
 		
 	if (len(args) < 2):
@@ -100,43 +100,33 @@ def makeMove(args, username, channel):
 		return generateJsonResponse('Invalid position %d is already taken. Please enter a position that is empty.' % board.getLetterAtPosition(position), error=True)
 	
 	# Valid position. Update board config and save.
-	board.setLetterAtPosition(player.letter, position)
+	board.setLetterAtPosition(playerLetter, position)
 	board.save()
 	
 	# Check if game is over.
-	game_over = False
+	gameOver = False
 	winningLetter = board.determineWinner()
 	winner = ''
 	if (board.isDraw()):
-		game_over = True
+		gameOver = True
 		winner = 'Draw'
 	elif (winningLetter != 0):
-		game_over = True
-		if player.letter == winningLetter:
+		gameOver = True
+		if playerLetter == winningLetter:
 			winner = player.username
 			
-	if game_over:
+	if gameOver:
 		board.game_over = True
 		board.active = False
 		board.save()
 
-		playerX = Player.objects.get(letter=1, channel=channel)
-		playerX.letter = 0
-		playerX.save()
-
-		playerO = Player.objects.get(letter=2, channel=channel)
-		playerO.letter = 0
-		playerO.save()
-
-	if (game_over):
 		if (winner == 'Draw'):
 			return generateJsonResponse('The game is over and it was a draw.', str(board))
 		else:
 			return generateJsonResponse('The game is over and %s is the winner.' % winner, str(board))
 
 	else:
-		nextPlayer = Player.objects.get(letter=board.determineWhichPlayerHasNextMove(), channel=channel)
-		return generateJsonResponse('%s has the next move.' % nextPlayer.username, str(board)) 
+		return showBoard(channel)
 
 def showBoard(channel):
 	# Fetch board or throw error if does not exist.
@@ -145,12 +135,8 @@ def showBoard(channel):
         except Board.DoesNotExist:
                 return generateJsonResponse('No active games at the moment.')
 
-	try:
-		player = Player.objects.get(letter = board.determineWhichPlayerHasNextMove(), channel=channel)
-	except Player.DoesNotExist:
-		return JsonResponse({})
-
-	return generateJsonResponse('%s has the next move.' % player.username, str(board))
+	player = board.playerO if board.determineWhichPlayerHasNextMove() == 2 else board.playerX
+	return generateJsonResponse('Active game between %s and %s.' % (board.playerX.username, board.playerO.username), '%s has the next move. %s' % (player.username, str(board)))
 
 def showHelp():
 	startGameCommandHelp = '/tictactoe startGame <username> = To start a new game, please specify the username of another user in the channel.'
