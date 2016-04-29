@@ -12,9 +12,10 @@ class Board(models.Model):
 	# 			   X | O |  	 1 | 2 | 0
 	config = models.IntegerField(default=0) 
 	game_over = models.BooleanField(default=False)
+	active = models.BooleanField(default=False)
 	
 	def __str__(self):
-		return "\n{0} | {1} | {2}\n----------\n{3} | {4} | {5}\n----------\n{6} | {7} | {8}".format(*self.convertBoardToListOfPlayers())
+		return "\n{0} | {1} | {2}\n----------\n{3} | {4} | {5}\n----------\n{6} | {7} | {8}".format(*self.convertBoardToListOfPlayers()).replace("0", "   ").replace("1", "X").replace("2", "O")
 
 	def getLetterAtPosition(self, position):
 		if (position < 0 or position > 8):

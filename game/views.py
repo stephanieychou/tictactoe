@@ -1,62 +1,78 @@
 from django.shortcuts import render
 from models import Player, Board
 from django.http import JsonResponse
+import logging
 
-def startGame(request):
+def index(request):
+	token = request.GET['token']
+	if (token != 'RNmcnBKCdOZBfs3S7habfT85'):
+		return JsonResponse({'text': 'ERROR: Invalid token %s' % token})
+	text = request.GET['text']	
+	args = text.split(' ')
+	if (args[0] == 'startGame'):
+		return startGame(args, request.GET['user_name'])
+	elif (args[0] == 'makeMove'):
+		return makeMove(args, request.GET['user_name'])
+	elif (args[0] == 'showBoard'):
+		return showBoard()
+
+def startGame(args, username):
+	usernameX = username # X is the user that ran startGame command
+	usernameO = args[1] # O is the user that usernameX chose to play with
+
 	# Create new board for new game.
-	board = Board()
+	board = Board(active=True)
 	board.save()
 	
 	# Try to find existing player by username and set position to 1 (X).
 	try:
-		playerX = Player.objects.get(username=request.GET['usernameX'])
+		playerX = Player.objects.get(username=usernameX)
 		playerX.letter = 1
 		playerX.save()
 	except Player.DoesNotExist:
 		# Player does not exist yet. Create new player with username.
-		playerX = Player(username=request.GET['usernameX'], letter=1)
+		playerX = Player(username=usernameX, letter=1)
 		playerX.save()
 	
 	# Try to find existing player by username and set position to 2 (O).	
 	try:
-		playerO = Player.objects.get(username=request.GET['usernameO'])
+		playerO = Player.objects.get(username=usernameO)
 		playerO.letter = 2
 		playerO.save()
 	except Player.DoesNotExist:
 		# Player does not exist yet. Create new player with username.
-		playerO = Player(username=request.GET['usernameO'], letter=2)
+		playerO = Player(username=usernameY, letter=2)
 		playerO.save()
 		
-	return JsonResponse({'board_id': board.id})
+	return JsonResponse({'response_type': 'in_channel','response_type': 'in_channel','text': 'New Tic Tac Toe game between %s and %s' % (usernameX, usernameO), 'attachments': [{'text': "%s\nPlayer X (%s) to make next move." % (str(board), playerX.username)}]})
 	
-def makeMove(request, board_id):
+def makeMove(args, username):
 	# Fetch board or throw error if does not exist.
 	try:
-		board = Board.objects.get(pk=board_id)
+		board = Board.objects.get(active=True)
 	except Board.DoesNotExist:	
-		return JsonResponse({'ERROR': "Board does not exist. id=%s" % board_id})
+		return JsonResponse({'response_type': 'in_channel','text': "ERROR: No active games at the moment."})
 		
 	if board.game_over:
-		return JsonResponse({'ERROR': "Game is over. id=%s" % board_id})
+		return JsonResponse({'response_type': 'in_channel','text': "Game is over. Please start a new game."})
 	
 	# Fetch player or throw error if does not exist.
-	username = request.GET['username']
 	try:
 		player = Player.objects.get(username=username)
 	except Player.DoesNotExist:
 		# Cannot find player.
-		return JsonResponse({'ERROR': "Player does not exist. username=%s" % username})
+		return JsonResponse({'response_type': 'in_channel','text': "ERROR: Player %s does not exist." % username})
 		
 	# Determine if player has next turn.
 	if player.letter != board.determineWhichPlayerHasNextMove():
-		return JsonResponse({'ERROR': "Player is going out of turn. username=%s" % username})
+		return JsonResponse({'response_type': 'in_channel','text': "ERROR: Player %s is going out of turn." % username})
 		
 	# Determine if position is valid.
-	position = int(request.GET['position'])
+	position = int(args[1])
 	if (position < 0 or position > 8):
-		return JsonResponse({'ERROR': "Invalid position, out of range. position=%d" % position})
+		return JsonResponse({'response_type': 'in_channel','text': "ERROR: Invalid position %d is out of range. Please enter a position between 0 and 8." % position})
 	if (board.getLetterAtPosition(position) != 0) :
-		return JsonResponse({'ERROR': "Invalid position, already taken. username=%d" % board.getLetterAtPosition(position)})
+		return JsonResponse({'response_type': 'in_channel','text': "ERROR: Invalid position %d is already taken. Please enter a position that is empty." % board.getLetterAtPosition(position)})
 	
 	# Valid position. Update board config and save.
 	board.setLetterAtPosition(player.letter, position)
@@ -76,7 +92,38 @@ def makeMove(request, board_id):
 			
 	if game_over:
 		board.game_over = True
+		board.active = False
 		board.save()
-	
-	return JsonResponse({'board_id': board.id, 'board_config': str(board), 'game_over' : game_over, 'winner': winner})
-	
+
+		playerX = Player.objects.get(letter=1)
+		playerX.letter = 0
+		playerX.save()
+
+		playerO = Player.objects.get(letter=2)
+		playerO.letter = 0
+		playerO.save()
+
+	if (game_over):
+		if (winner == "Draw"):
+			return JsonResponse({'response_type': 'in_channel','text': 'The game is over and it was a draw.', 'attachments':[{'text': str(board)}]})
+		else:
+			return JsonResponse({'response_type': 'in_channel','text': 'The game is over and %s is the winner.' % winner, 'attachments':[{'text': str(board)}]})
+
+	else:
+		nextPlayer = Player.objects.get(letter=board.determineWhichPlayerHasNextMove())
+		return JsonResponse({'response_type': 'in_channel','text': '%s has the next move.' % nextPlayer.username, 'attachments':[{'text': str(board)}]}) 
+
+def showBoard():
+	# Fetch board or throw error if does not exist.
+        try:
+                board = Board.objects.get(active=True)
+        except Board.DoesNotExist:
+                return JsonResponse({'response_type': 'in_channel','text': "No active games at the moment."})
+
+	try:
+		player = Player.objects.get(letter = board.determineWhichPlayerHasNextMove())
+	except Player.DoesNotExist:
+		return JsonResponse({})
+
+	return JsonResponse({'response_type': 'in_channel', 'text':'%s has the next turn' % player.username, 'attachments':[{'text':str(board)}]})
+
