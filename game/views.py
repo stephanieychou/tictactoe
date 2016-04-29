@@ -89,27 +89,16 @@ def makeMove(args, username, channel):
 	board.save()
 	
 	# Check if game is over.
-	gameOver = False
 	winningLetter = board.determineWinner()
-	winner = ''
-	if (board.isDraw()):
-		gameOver = True
-		winner = 'Draw'
-	elif (winningLetter != 0):
-		gameOver = True
-		if playerLetter == winningLetter:
-			winner = player.username
-			
-	if gameOver:
-		board.game_over = True
-		board.active = False
-		board.save()
-
-		if (winner == 'Draw'):
-			return generateJsonResponse('The game is over and it was a draw.', str(board))
+	if (board.isDraw() or winningLetter != 0):
+	        board.game_over = True
+                board.active = False
+                board.save()
+		if (board.isDraw()):
+			return generateJsonResponse('The game is over and it was a draw.', str(board))	
 		else:
+			winner = player.username if playerLetter == winningLetter else ''
 			return generateJsonResponse('The game is over and %s is the winner.' % winner, str(board))
-
 	else:
 		return showBoard(channel)
 
